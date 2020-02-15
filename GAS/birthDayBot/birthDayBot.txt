@@ -1,0 +1,189 @@
+function doGet(e){
+
+//function happyBirthday() {
+
+  //initialize result List
+  var resultList = {};
+  var isSuccessPost = true;
+
+  //birthday sheet
+  var birthdaySpread = SpreadsheetApp.openById("1b8ZbSC6q3gpBXY-mnXBwtfANyCXBt0l8VOYtyIAuXzY");
+  var birthdaySheet  = birthdaySpread.getSheetByName("シート1");
+  var varList = birthdaySheet.getRange("A:Z").getValues();
+
+  //system sheet
+  var systemSpread = SpreadsheetApp.openById("1_82zQTv_aozlj4iGcBi8yr2Ja5fWt-JTgtjMd6CVCqU");
+  var systemSheet  = systemSpread.getSheetByName("シート1");
+  var systemParamList = systemSheet.getRange("A:F").getValues();
+
+  //load system Sheet
+  var channelNameIndex ;
+  var executeDateIndex;
+  var conditionsIndex;
+  var sentenceIndex;
+  var userIndex;
+  var tokenIndex;
+
+  //TODO:変数をまとめて格納するArrayList作成
+  var columnNames=systemParamList[0];
+  for(var i=0;i<columnNames.length;i++){
+    var cellName = columnNames[i];
+    if(cellName == "チャンネル名"){
+    channelNameIndex = i;
+    }else if(cellName == "送信日付(日)"){
+     executeDateIndex = i;
+    }else if(cellName == "条件(正規表現)"){
+      conditionsIndex = i;
+    }else if(cellName == "文章"){
+      sentenceIndex = i;
+    }else if(cellName == "送信ユーザー"){
+      userIndex = i;
+    }else if(cellName == "slackトークン"){
+      tokenIndex = i;
+    }
+  }
+
+  //initialize
+  var url = "https://slack.com/api/chat.postMessage";
+  //var token = //"xoxp-925049927684-925504555136-920988391379-20e0df4e752f0002941b1bd563791a22";
+
+
+  //「BirthDay_Bot_システムファイル」の行数だけ実行(カラム名称行は除く）
+  for(var index = 1;index < systemParamList.length;index++){
+
+    var systemParamRow = systemParamList[index];
+
+    var baseSentence = systemParamRow[sentenceIndex];
+    var executeDate = systemParamRow[executeDateIndex];
+    var channel = systemParamRow[channelNameIndex];
+    var conditions = systemParamRow[conditionsIndex];
+    var user = systemParamRow[userIndex];
+    var token = systemParamRow[tokenIndex];
+
+
+    //本日が実行日付だった場合処理を実行
+    if(isExecuteDate(executeDate)){
+      //filter by conditions
+      var filterdVarList = filterByConditions(conditions,varList);
+
+      //メッセージ送信
+      if(varList.length > 1){
+        //文章作成
+        var text = createSentence(baseSentence,birthdaySheet,filterdVarList);
+        //post
+        var slackApp = SlackApp.create(token);
+        var result = slackApp.postMessage(channel, text, {
+          username : user
+        });
+
+        if(result["ok"]){
+          resultList[index+1+"行目"] ={message:"送信成功しました"};
+        }else{
+          result["message"] = "送信失敗しました";
+          resultList[index+1+"行目"] =result;
+        }
+
+      }
+    }
+  }
+
+  var out = ContentService.createTextOutput();
+
+  out.setMimeType(ContentService.MimeType.JSON);
+  out.setContent(JSON.stringify(resultList));
+  return out;
+
+}
+
+function filterByConditions(conditions,varList){
+
+  var resultList = varList.concat();
+  var varNameList = resultList[0];
+  for(i=0;i<varNameList.length;i++){
+    var varName = varNameList[i]
+    var varNameEndIndex = conditions.indexOf("{"+varName+"}")+varName.length+"{}".length;
+    var command = conditions.substr(varNameEndIndex,1);
+    var value = conditions.substr(varNameEndIndex+1);
+
+    if(varNameEndIndex == -1){
+     continue;
+    }
+
+    if(command == "="){
+      for(var y=resultList.length-1;y>0;y--){
+        var varValue = resultList[y][i];
+        if(varValue.search(value) < 0){
+          resultList.splice(y,1)
+        }
+      }
+    }
+  }
+
+  return resultList;
+}
+
+function isExecuteDate(executeDate){
+  var nowDate = new Date();
+  return (nowDate.getDate() == executeDate);
+}
+
+
+function createSentence(baseSentence,birthdaySheet,varList){
+  var startForText = "<for>";
+  var endForText = "</for>";
+
+  var resultSentence = ""+baseSentence;
+
+
+  //process of for loop
+  var startForIndex = resultSentence.indexOf(startForText);
+  var endForIndex = resultSentence.indexOf(endForText);
+  while(startForIndex>-1
+     &&endForIndex>-1){
+        var beforeForSentence = resultSentence.substring(0,startForIndex);
+        var baseForSentence = resultSentence.substring(startForIndex+startForText.length,endForIndex);
+        var afterForSentence = resultSentence.substring(endForIndex+endForText.length);
+
+    var forSentenceList ="";
+    var varNameList = varList[0];
+    for(var y=1;y <varList.length;y++){
+      //injectin Variable
+      var varValueList = varList[y];
+      forSentenceList +=  injectionVariable(varNameList,varValueList,baseForSentence);
+    }
+
+    //update Sentence
+    resultSentence = beforeForSentence
+      +forSentenceList
+      +afterForSentence;
+
+    //次の<for></for>を検索
+    startForIndex = resultSentence.indexOf(startForText);
+    endForIndex = resultSentence.indexOf(endForText);
+
+  }
+
+  return resultSentence;
+
+}
+
+//replace variable
+function injectionVariable(varNameList,varValueList,baseForSentence){
+   var processingSentence = ""+baseForSentence;
+   var isExistVar = false;
+  for(var i=0;i<varNameList.length;i++){
+    var varName = varNameList[i] ;
+    var varValue = varValueList[i];
+    if(varName!=""&&varValue!=""){
+      processingSentence = processingSentence.replace("{"+varName+"}",varValue);
+      isExistVar = true;
+    }
+
+
+  }
+  if(isExistVar == false){
+   processingSentence = "";
+  }
+  return processingSentence;
+
+}

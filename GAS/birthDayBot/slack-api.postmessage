@@ -1,0 +1,1 @@
+curl -XPOST -d "token=xoxp-925049927684-925504555136-920988391379-20e0df4e752f0002941b1bd563791a22" -d "channel=ono_test" -d "text=Hello World"  "https://slack.com/api/chat.postMessage"
