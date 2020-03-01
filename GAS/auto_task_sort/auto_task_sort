@@ -1,0 +1,37 @@
+function myFunction() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sht = ss.getSheetByName(タスクリスト);
+  
+  sort task list
+  sht.sort(2,false);
+  sht.sort(3,false);
+  
+  refilter status
+  filterSet = {};FilterSet
+ 
+  フィルターをかけるシートのSheetIdを取得
+  filterSet.range = {
+    sheetIdsht.getSheetId()
+  }; 
+  
+  フィルターをかける列
+  filterSet.criteria = {};
+  columnIndex = 0;３列目の値選択
+  
+  フィルターで非表示にする項目
+  filterSet['criteria'][columnIndex]={
+    'hiddenValues'[済み,済]
+  };
+  
+  requestメソッドでAPI接続してフィルターをかける
+  request = {
+    setBasicFilter {
+      filter filterSet
+    }
+  };
+  
+  updateメソッドでシート更新　　　　　　　　　　　　　　　　　　　
+  Sheets.Spreadsheets.batchUpdate({'requests'[request]},ss.getId());
+  
+  
+}
